@@ -1,0 +1,12 @@
+{
+    "name": "electric-age",
+    "version": "0.1.0",
+    "title": "Electric Age",
+    "author": "Silentium Noxe",
+    "description": "Fully reworked electric system",
+    "factorio_version": "2.0",
+    "dependencies": [
+        "base >= 2.0.59",
+        "? space-age"
+    ]
+}

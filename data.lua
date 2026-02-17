@@ -1,0 +1,1 @@
+require "__electric-age__/prototypes/entities"
