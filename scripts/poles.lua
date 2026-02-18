@@ -1,8 +1,4 @@
-local LIMITS = {
-    ["small-electric-pole"] = 16666.66,
-    ["medium-electric-pole"] = 83333.33,
-    ["big-electric-pole"] = 250000.00
-}
+local LIMIT = 83333.33 
 
 -- check per tick
 local cpt = 10
@@ -29,9 +25,7 @@ end
 
 function poles_manager.check_overload(entity)
     if not (entity and entity.valid) then return -1 end
-
-    local limit = LIMITS[entity.name]
-    if not limit then return -1 end
+    if not entity.type == "electric-pole" then return -1 end
 
     local statistics = entity.electric_network_statistics
     if not statistics then return -1 end
@@ -46,10 +40,7 @@ function poles_manager.check_overload(entity)
         }
     end
 
-    local nid = entity.get_wire_connector(defines.wire_connector_id.pole_copper).network_id
-    game.print("NID: " .. nid .. " network: " .. network .. " limit: " .. limit .. " rate: " .. network / limit)
-
-    local rate = network / limit
+    local rate = network / LIMIT
     if rate > 0.9 and rate < 1.0 then
         return 1
     elseif rate >= 1.0 then
@@ -73,7 +64,7 @@ function poles_manager.disconnect(entity)
             conn.disconnect_from(target)
 
             entity.surface.create_entity{
-                name = "small-electric-pole-explosion", 
+                name = entity.name .. "-explosion", 
                 position = entity.position
             }
         end
