@@ -1,6 +1,13 @@
-local LIMIT = 83333.33 
+local SUB_LIMIT = 200000 -- 12MW / 60 ticks = 200,000 J/tick
 
--- check per tick
+local quality_multipliers = {
+    ["normal"] = 1.0,      -- 12 MW
+    ["uncommon"] = 1.3,    -- 15.6 MW
+    ["rare"] = 1.7,        -- 20.4 MW
+    ["epic"] = 2.5,        -- 30 MW
+    ["legendary"] = 5.0    -- 60 MW
+}
+
 local cpt = 10
 
 local poles_manager = {}
@@ -14,20 +21,22 @@ end
 
 function poles_manager.reg(entity)
     if not (entity and entity.valid) then return end
-    if LIMITS[entity.name] then
-        storage.electric_age.list[entity.unit_number] = entity
-    end
+    if entity.name ~= "substation" then return end
+
+    storage.electric_age.list[entity.unit_number] = {pole = entity}
 end
 
 function poles_manager.unreg(id)
-    storage.electric_age.list[id] = nil
+    local entry = storage.electric_age.list[id]
+    if entry then
+        storage.electric_age.list[id] = nil
+    end
 end
 
-function poles_manager.check_overload(entity)
-    if not (entity and entity.valid) then return -1 end
-    if not entity.type == "electric-pole" then return -1 end
+function poles_manager.check_overload(pole)
+    if not (pole and pole.valid) then return -1 end
 
-    local statistics = entity.electric_network_statistics
+    local statistics = pole.electric_network_statistics
     if not statistics then return -1 end
     
     local network = 0
@@ -40,50 +49,21 @@ function poles_manager.check_overload(entity)
         }
     end
 
-    local rate = network / LIMIT
-    if rate > 0.9 and rate < 1.0 then
-        return 1
-    elseif rate >= 1.0 then
-        return 2
-    end
-
-    return 0
+    local rate = network / (SUB_LIMIT * quality_multipliers[pole.quality])
+    return rate > 1
 end
 
-function poles_manager.disconnect(entity)
-    if not (entity and entity.valid) then return end
-
-    local conn = entity.get_wire_connector(defines.wire_connector_id.pole_copper)
-    if not (conn and conn.valid) then return end
-
-    local connections = conn.connections
-    if #connections > 0 then
-        local rand = math.random(#connections)
-        local target = connections[rand].target
-        if target and target.valid then
-            conn.disconnect_from(target)
-
-            entity.surface.create_entity{
-                name = entity.name .. "-explosion", 
-                position = entity.position
-            }
-        end
-    end
-end
-
-function poles_manager.warn(entity)
+function poles_manager.apply_overheat_damage(entity)
     if not (entity and entity.valid) then return end
     
-    local force = entity.force
-    for _, player in pairs(force.players) do
-        player.add_custom_alert(
-            entity,
-            {type="virtual", name = "signal-lightning"},
-            "High load line",
-            true
-        )
-    end
+    local surface = entity.surface
+    local pos = entity.position
 
+    surface.create_entity{
+        name = "fire-flame",
+        position = pos,
+        initial_ground_flame_count = 5
+    }
 end
 
 function poles_manager.on_nth_tick()
@@ -92,7 +72,7 @@ function poles_manager.on_nth_tick()
 
     local index = data.next
     for i = 1, cpt do
-        local id, entity = next(data.list, index)
+        local id, entry = next(data.list, index)
 
         if not id then
             index = nil
@@ -100,16 +80,15 @@ function poles_manager.on_nth_tick()
         end
 
         index = id
-        if entity and entity.valid then
-            local result = poles_manager.check_overload(entity)
-            if result == 1 then
-                poles_manager.warn(entity)
-            elseif result == 2 then
-                poles_manager.disconnect(entity)
-                break
+        local pole = entry.pole
+
+        if pole and pole.valid then
+            local yes = poles_manager.check_overload(pole)
+            if yes then
+                poles_manager.apply_overheat_damage(pole)
             end
         else
-            data.list[id] = nil
+            poles_manager.unreg(id)
         end
     end
 
